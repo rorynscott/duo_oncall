@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+from collections import defaultdict
+import configparser
 from datetime import datetime
 import json
 import os
@@ -17,16 +19,12 @@ CACHE_PATH = (
 #   API_KEY:<your_api_key>
 #   API_ID:<your_api_id>
 CREDS_FILE = ".victorops"
+CONFIG_FILE = ".config.ini"
 FMT = " | color=#000001,#FFFFFE md=True"
 SWIFTBAR_CACHE_PATH = os.environ.get(
     "SWIFTBAR_PLUGIN_CACHE_PATH",
     CACHE_PATH
 )
-TEAM_MAP = {
-    "admin-user-management": "team-jAyTiBSiiyygnKJL",
-    "Applications": "team-DehKy1LuixchxEbi",
-    "Platform-Services": "team-1z9FXy224k5xWjrM",
-}
 
 
 class Creds:
@@ -57,10 +55,7 @@ def _format_date(date_str: str) -> str:
 def _get_creds() -> dict:
     """Get the credentials from the creds file."""
     cred_dict = {}
-    file_ = os.path.join(
-        SWIFTBAR_CACHE_PATH,
-        CREDS_FILE
-    )
+    file_ = os.path.join(SWIFTBAR_CACHE_PATH, CREDS_FILE)
     with open(file_, encoding="utf-8") as f:
         for line in f.readlines():
             key, value = line.strip().split(":")
@@ -69,30 +64,44 @@ def _get_creds() -> dict:
     return creds
 
 
+def _get_config() -> configparser.ConfigParser:
+    """Get the config file."""
+
+    config = configparser.ConfigParser()
+    plugin_path = os.environ.get(
+        "SWIFTBAR_PLUGIN_PATH",
+        os.path.realpath(__file__)
+    )
+    plugin_dir = os.path.dirname(plugin_path)
+    config.read(os.path.join(plugin_dir, CONFIG_FILE))
+    return config
+
+
 def display_schedules(data: dict) -> None:
     """Display the on-call schedules in a readable format."""
     print(f'**Team: {data["team"]["name"]}** {FMT}')
+    shift_collection = defaultdict(list)
     for schedule in data["schedules"]:
-        print(f"*Policy Name: {schedule['policy']['name']}* {FMT}")
+        print(f"*Policy: {schedule['policy']['name']}* {FMT}")
         sched = schedule["schedule"]
         overrides = schedule.get("overrides", [])
         for s in sched:
             for r in s["rolls"]:
                 start_dt = _format_date(r["start"])
                 end_dt = _format_date(r["end"])
-                print(
-                    f"**{r['onCallUser']['username']}**: Start {start_dt}, End {end_dt} {FMT}"
+                shift_collection[f"{start_dt}{end_dt}"].append(
+                    (
+                        start_dt,
+                        end_dt,
+                        s["shiftName"],
+                        r["onCallUser"]["username"]
+                    )
                 )
-        if overrides:
-            print("Overrides:")
-            for o in overrides:
-                start_dt = _format_date(o["start"])
-                end_dt = _format_date(o["end"])
-                print(
-                    f"**{o['overrideOnCallUser']['username']}** for "
-                    f"**{o['origOnCallUser']['username']}**: Start "
-                    f"{start_dt}, End {end_dt} {FMT}"
-                )
+        for day_ in shift_collection.values():
+            print(f"**{day_[0][0]}** - **{day_[0][1]}** {FMT}")
+            for start_dt, end_dt, shift, user in day_:
+                print(f"**{user}** for shift {shift} {FMT}")
+        print_overrides(overrides)
         sep()
 
 
@@ -108,6 +117,21 @@ def get_oncall_schedule(team: str) -> dict:
     return json_data
 
 
+def print_overrides(overrides: list) -> None:
+    """Print the overrides for the on-call schedule."""
+    if not overrides:
+        return
+    print("Overrides:")
+    for o in overrides:
+        start_dt = _format_date(o["start"])
+        end_dt = _format_date(o["end"])
+        print(
+            f"**{o['overrideOnCallUser']['username']}** for "
+            f"**{o['origOnCallUser']['username']}**: Start "
+            f"{start_dt}, End {end_dt} {FMT}"
+        )
+
+
 def sep():
     """Print a separator line."""
     print("---")
@@ -116,9 +140,10 @@ def sep():
 def main():
     """Main function to run the script."""
 
+    conf = _get_config()
     print("DuoOnCall")
     sep()
-    for team in TEAM_MAP.values():
+    for team in conf["teams"].values():
         data = get_oncall_schedule(team)
         display_schedules(data)
     print("Refresh | refresh=true")
