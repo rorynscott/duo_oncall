@@ -100,7 +100,7 @@ def display_schedules(data: dict) -> None:
         for day_ in shift_collection.values():
             print(f"**{day_[0][0]}** - **{day_[0][1]}** {FMT}")
             for start_dt, end_dt, shift, user in day_:
-                print(f"**{user}** for shift {shift} {FMT}")
+                print(f"‣ {user} for {shift} {FMT}")
         print_overrides(overrides)
         sep()
 
