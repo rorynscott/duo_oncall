@@ -1,12 +1,17 @@
 # Installation Instructions
 
-1. You will need a credential file (named `.victorops`), which contains an API key and ID from VictorOps. Ask @rorscott for one! You will need to put it in your SwiftBar cache directory; mine is `/Users/rorscott/Library/Caches/com.ameba.SwiftBar/Plugins/duo_oncall.12h.py/.victorops` 
+1. You will need a credential file (named `.victorops`), which contains an API key and ID from VictorOps. Ask @rorscott for one! You will need to put it in your SwiftBar cache directory; mine is `/Users/rorscott/Library/Caches/com.ameba.SwiftBar/Plugins/duo_oncall.12h.py/.victorops`
 2. You can install Python 3 or use the executable in `dist/duo_oncall.12h/duo_oncall.12h`
 2. Install SwiftBar with "brew install swiftbar" or from https://github.com/swiftbar/SwiftBar/releases/latest
 3. Start SwiftBar and it will ask you where you want to store plugins. I used `Documents/swiftbar_plugins`.
 4. Install in plugin directory `git clone https://github.com/rorynscott/duo_oncall.git -- ~/Documents/swiftbar_plugins/duo_oncall`
-5. Restart SwiftBar
-6. In the menu choose SwiftBar -> Preferences -> Launch at Login
+6. Create a `.config.ini` file. You can use the `.config.ini.sample` file and remove any teams you aren't interested in. My config file looks like this:
+```
+[teams]
+admin-user-management = team-jAyTiBSiiyygnKJL
+```
+7. Restart SwiftBar
+8. In the menu choose SwiftBar -> Preferences -> Launch at Login
 
 
 # Updates
