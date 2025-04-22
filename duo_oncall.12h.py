@@ -153,6 +153,10 @@ def main():
     """Main function to run the script."""
 
     conf = _get_config()
+    try:
+        display_conf = conf["display_conf"]
+    except KeyError:
+        display_conf = {}
     print("DuoOnCall")
     sep()
     creds = _get_creds()
@@ -160,7 +164,7 @@ def main():
     for team in conf["teams"].values():
         data = get_oncall_schedule(team, creds)
         display_schedules(
-            conf["display_conf"]["user_display"],
+            display_conf.get("user_display", "displayName"),
             data,
             **users
         )

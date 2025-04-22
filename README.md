@@ -5,7 +5,7 @@
 2. Install SwiftBar with "brew install swiftbar" or from https://github.com/swiftbar/SwiftBar/releases/latest
 3. Start SwiftBar and it will ask you where you want to store plugins. I used `Documents/swiftbar_plugins`.
 4. Install in plugin directory `git clone https://github.com/rorynscott/duo_oncall.git -- ~/Documents/swiftbar_plugins/duo_oncall`
-6. Create a `.config.ini` file. You can use the `.config.ini.sample` file and remove any teams you aren't interested in. In the `display_conf` block, you **must** include a `user_display` key. The value can be any field associated with a user found in the `/v2/user` response body found in [the docs](https://portal.victorops.com/public/api-docs.html#!/Users/get_api). My config file looks like this:
+6. Create a `.config.ini` file. You can use the `.config.ini.sample` file and remove any teams you aren't interested in. In the `display_conf` block, you **can** include a `user_display` key. The value can be any field associated with a user found in the `/v2/user` response body found in [the docs](https://portal.victorops.com/public/api-docs.html#!/Users/get_api). My config file looks like this:
 ```
 [display_conf]
 user_display = displayName
