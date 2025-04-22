@@ -9,7 +9,7 @@ from urllib.request import Request, urlopen
 
 
 BASE_URL = (
-    "https://api.victorops.com/api-public/v2/team/{team}/oncall/schedule?daysForward=30"
+    "https://api.victorops.com/api-public"
 )
 CACHE_PATH = (
     Path.home() / "Library" / "Caches" / "com.ameba.SwiftBar" /
@@ -21,10 +21,12 @@ CACHE_PATH = (
 CREDS_FILE = ".victorops"
 CONFIG_FILE = ".config.ini"
 FMT = " | color=#000001,#FFFFFE md=True"
+SCHEDULE_URI = "/v2/team/{team}/oncall/schedule?daysForward=30"
 SWIFTBAR_CACHE_PATH = os.environ.get(
     "SWIFTBAR_PLUGIN_CACHE_PATH",
     CACHE_PATH
 )
+USER_URI = "/v2/user"
 
 
 class Creds:
@@ -77,7 +79,7 @@ def _get_config() -> configparser.ConfigParser:
     return config
 
 
-def display_schedules(data: dict) -> None:
+def display_schedules(user_display: str, data: dict, **users) -> None:
     """Display the on-call schedules in a readable format."""
     print(f'**Team: {data["team"]["name"]}** {FMT}')
     shift_collection = defaultdict(list)
@@ -94,7 +96,7 @@ def display_schedules(data: dict) -> None:
                         start_dt,
                         end_dt,
                         s["shiftName"],
-                        r["onCallUser"]["username"]
+                        users[r["onCallUser"]["username"]][user_display]
                     )
                 )
         for day_ in shift_collection.values():
@@ -105,16 +107,26 @@ def display_schedules(data: dict) -> None:
         sep()
 
 
-def get_oncall_schedule(team: str) -> dict:
+def get_oncall_schedule(team: str, creds: Creds) -> dict:
     """Get the on-call schedule for a given team."""
-    creds = _get_creds()
     headers = _construct_headers(creds)
-    url = BASE_URL.format(team=team)
+    url = f"{BASE_URL}{SCHEDULE_URI.format(team=team)}"
     req = Request(url, headers=headers)
     with urlopen(req) as response:
         data = response.read().decode("utf-8")
         json_data = json.loads(data)
     return json_data
+
+
+def get_users(creds: Creds) -> dict:
+    """Get the users from the API."""
+    headers = _construct_headers(creds)
+    url = f"{BASE_URL}{USER_URI}"
+    req = Request(url, headers=headers)
+    with urlopen(req) as response:
+        data = response.read().decode("utf-8")
+        json_data = json.loads(data)
+    return {user["username"]: user for user in json_data["users"]}
 
 
 def print_overrides(overrides: list) -> None:
@@ -143,9 +155,15 @@ def main():
     conf = _get_config()
     print("DuoOnCall")
     sep()
+    creds = _get_creds()
+    users = get_users(creds)
     for team in conf["teams"].values():
-        data = get_oncall_schedule(team)
-        display_schedules(data)
+        data = get_oncall_schedule(team, creds)
+        display_schedules(
+            conf["display_conf"]["user_display"],
+            data,
+            **users
+        )
     print("Refresh | refresh=true")
     sep()
 
