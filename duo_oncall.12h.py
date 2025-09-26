@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from collections import defaultdict
 import configparser
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 import os
 from pathlib import Path
@@ -20,6 +20,7 @@ CACHE_PATH = (
 #   API_ID:<your_api_id>
 CREDS_FILE = ".victorops"
 CONFIG_FILE = ".config.ini"
+DT_FMT = "%Y-%m-%dT%H:%M:%S%z"
 FMT = " | color=#000001,#FFFFFE md=True"
 SCHEDULE_URI = "/v2/team/{team}/oncall/schedule?daysForward=30"
 SWIFTBAR_CACHE_PATH = os.environ.get(
@@ -39,6 +40,21 @@ class Creds:
         self.api_id = api_id
 
 
+class UserShift:
+    """Class to hold the user shift information."""
+
+    __slots__ = ("start_hour", "end_hour", "shift", "user")
+
+    def __init__(self, start_hour: str, end_hour: str, shift: str, user: str):
+        self.start_hour = start_hour
+        self.end_hour = end_hour
+        self.shift = shift
+        self.user = user
+
+    def __repr__(self) -> str:
+        return f"‣ {self.user} for {self.shift} ({self.start_hour} - {self.end_hour}) {FMT}"
+
+
 def _construct_headers(creds: Creds) -> dict:
     """Construct the headers for the API request."""
     return {
@@ -48,10 +64,10 @@ def _construct_headers(creds: Creds) -> dict:
     }
 
 
-def _format_date(date_str: str) -> str:
+def _date_to_str(date_obj: datetime, dt_fmt: str = "%Y-%m-%d %H:%M") -> str:
     """Format the date string to a more readable format."""
-    date_obj = datetime.strptime(date_str, "%Y-%m-%dT%H:%M:%S%z")
-    return date_obj.strftime("%Y-%m-%d %H:%M")
+
+    return date_obj.strftime(dt_fmt)
 
 
 def _get_creds() -> dict:
@@ -79,6 +95,12 @@ def _get_config() -> configparser.ConfigParser:
     return config
 
 
+def _date_str_to_dt(date_str: str, dt_fmt: str = DT_FMT) -> datetime:
+    """Convert a date string to a datetime object."""
+
+    return datetime.strptime(date_str, dt_fmt)
+
+
 def display_schedules(user_display: str, data: dict, **users) -> None:
     """Display the on-call schedules in a readable format."""
     print(f'**Team: {data["team"]["name"]}** {FMT}')
@@ -89,22 +111,28 @@ def display_schedules(user_display: str, data: dict, **users) -> None:
         overrides = schedule.get("overrides", [])
         for s in sched:
             for r in s["rolls"]:
-                start_dt = _format_date(r["start"])
-                end_dt = _format_date(r["end"])
-                shift_collection[f"{start_dt}{end_dt}"].append(
-                    (
-                        start_dt,
-                        end_dt,
-                        s["shiftName"],
-                        users[r["onCallUser"]["username"]][user_display]
+                start = _date_str_to_dt(r["start"])
+                end = _date_str_to_dt(r["end"])
+                days = (
+                    start + timedelta(days=x) for x in range(
+                        0, (end - start).days + 1
                     )
                 )
-        for day_ in shift_collection.values():
-            print(f"**{day_[0][0]}** - **{day_[0][1]}** {FMT}")
-            for start_dt, end_dt, shift, user in day_:
-                print(f"‣ {user} for {shift} {FMT}")
-        print_overrides(overrides)
-        sep()
+                for dt in days:
+                    shift_collection[dt.date()].append(
+                        UserShift(
+                            _date_to_str(start, "%H:%M"),
+                            _date_to_str(end, "%H:%M"),
+                            s["shiftName"],
+                            users[r["onCallUser"]["username"]][user_display]
+                        )
+                    )
+        for day_, shifts in sorted(shift_collection.items()):
+            print(f"**{day_}** {FMT}")
+            for shift in shifts:
+                print(shift)
+        # print_overrides(overrides)
+        # sep()
 
 
 def get_oncall_schedule(team: str, creds: Creds) -> dict:
@@ -135,12 +163,14 @@ def print_overrides(overrides: list) -> None:
         return
     print("Overrides:")
     for o in overrides:
-        start_dt = _format_date(o["start"])
-        end_dt = _format_date(o["end"])
+        start = _date_str_to_dt(o["start"])
+        end = _date_str_to_dt(o["end"])
+        start_str = _date_to_str(start)
+        end_str = _date_to_str(end)
         print(
             f"**{o['overrideOnCallUser']['username']}** for "
             f"**{o['origOnCallUser']['username']}**: Start "
-            f"{start_dt}, End {end_dt} {FMT}"
+            f"{start_str}, End {end_str} {FMT}"
         )
 
 
@@ -174,7 +204,7 @@ def main():
 
 # metadata
 # <bitbar.title>Duo OnCall</bitbar.title>
-# <bitbar.version>v1.0</bitbar.version>
+# <bitbar.version>v1.1</bitbar.version>
 # <bitbar.author>Rory Scott</bitbar.author>
 # <bitbar.author.github>rorynscott</bitbar.author.github>
 # <bitbar.desc>Plugin shows who is on call.</bitbar.desc>
