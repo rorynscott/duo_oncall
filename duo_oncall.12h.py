@@ -101,6 +101,60 @@ def _date_str_to_dt(date_str: str, dt_fmt: str = DT_FMT) -> datetime:
     return datetime.strptime(date_str, dt_fmt)
 
 
+def _shifts_equal(shifts1: list, shifts2: list) -> bool:
+    """Check if two lists of shifts are identical."""
+    if len(shifts1) != len(shifts2):
+        return False
+    
+    # Sort shifts by user and shift name for comparison
+    sorted1 = sorted(shifts1, key=lambda s: (s.user, s.shift, s.start_hour, s.end_hour))
+    sorted2 = sorted(shifts2, key=lambda s: (s.user, s.shift, s.start_hour, s.end_hour))
+    
+    for s1, s2 in zip(sorted1, sorted2):
+        if (s1.user != s2.user or s1.shift != s2.shift or 
+            s1.start_hour != s2.start_hour or s1.end_hour != s2.end_hour):
+            return False
+    
+    return True
+
+
+def _group_consecutive_dates(shift_collection: dict) -> list:
+    """Group consecutive dates with identical shift assignments into date ranges.
+    
+    Returns a list of tuples: ((start_date, end_date), [shifts])
+    """
+    if not shift_collection:
+        return []
+    
+    sorted_dates = sorted(shift_collection.keys())
+    date_ranges = []
+    
+    current_start = sorted_dates[0]
+    current_end = sorted_dates[0]
+    current_shifts = shift_collection[sorted_dates[0]]
+    
+    for i in range(1, len(sorted_dates)):
+        date = sorted_dates[i]
+        shifts = shift_collection[date]
+        
+        # Check if this date is consecutive and has the same shifts
+        if (date == current_end + timedelta(days=1) and 
+            _shifts_equal(shifts, current_shifts)):
+            # Extend the current range
+            current_end = date
+        else:
+            # Save the current range and start a new one
+            date_ranges.append(((current_start, current_end), current_shifts))
+            current_start = date
+            current_end = date
+            current_shifts = shifts
+    
+    # Don't forget the last range
+    date_ranges.append(((current_start, current_end), current_shifts))
+    
+    return date_ranges
+
+
 def display_schedules(user_display: str, data: dict, **users) -> None:
     """Display the on-call schedules in a readable format."""
     print(f'**Team: {data["team"]["name"]}** {FMT}')
@@ -127,8 +181,17 @@ def display_schedules(user_display: str, data: dict, **users) -> None:
                             users[r["onCallUser"]["username"]][user_display]
                         )
                     )
-        for day_, shifts in sorted(shift_collection.items()):
-            print(f"**{day_}** {FMT}")
+        
+        # Group consecutive dates with identical shifts
+        date_ranges = _group_consecutive_dates(shift_collection)
+        
+        for date_range, shifts in date_ranges:
+            if date_range[0] == date_range[1]:
+                # Single day
+                print(f"**{date_range[0]}** {FMT}")
+            else:
+                # Date range
+                print(f"**{date_range[0]} - {date_range[1]}** {FMT}")
             for shift in shifts:
                 print(shift)
         # print_overrides(overrides)
