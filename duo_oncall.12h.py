@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 from urllib.request import Request, urlopen
+from typing import Tuple
 
 
 BASE_URL = (
@@ -38,6 +39,48 @@ class Creds:
     def __init__(self, api_key: str, api_id: str):
         self.api_key = api_key
         self.api_id = api_id
+
+
+class ShiftCheck:
+    """Class to check if two lists of shifts are identical."""
+
+    def _eq_check(self, obj1: str, obj2: str, attr: str) -> bool:
+        """Check if two attributes are equal."""
+
+        return getattr(obj1, attr) == getattr(obj2, attr)
+
+    def _len_check(self, shifts1: list, shifts2: list) -> bool:
+        """Check if two lists of shifts are the same length."""
+
+        return len(shifts1) == len(shifts2)
+
+    def _sort_shifts(self, shifts: list) -> list:
+        """Sort shifts by start time."""
+
+        return sorted(shifts, key=lambda s: (
+            s.user,
+            s.shift,
+            s.start_hour,
+            s.end_hour
+        ))
+
+    def shifts_equal(self, shifts1: list, shifts2: list) -> bool:
+        """Check if two lists of shifts are identical."""
+
+        # Sort shifts by user and shift name for comparison
+        sorted1 = self._sort_shifts(shifts1)
+        sorted2 = self._sort_shifts(shifts2)
+
+        if not self._len_check(shifts1, shifts2):
+            return False
+
+        for s1, s2 in zip(sorted1, sorted2):
+            if any(not self._eq_check(s1, s2, attr) for attr in (
+                "user", "shift", "start_hour", "end_hour"
+            )):
+                return False
+
+        return True
 
 
 class UserShift:
@@ -101,45 +144,28 @@ def _date_str_to_dt(date_str: str, dt_fmt: str = DT_FMT) -> datetime:
     return datetime.strptime(date_str, dt_fmt)
 
 
-def _shifts_equal(shifts1: list, shifts2: list) -> bool:
-    """Check if two lists of shifts are identical."""
-    if len(shifts1) != len(shifts2):
-        return False
-    
-    # Sort shifts by user and shift name for comparison
-    sorted1 = sorted(shifts1, key=lambda s: (s.user, s.shift, s.start_hour, s.end_hour))
-    sorted2 = sorted(shifts2, key=lambda s: (s.user, s.shift, s.start_hour, s.end_hour))
-    
-    for s1, s2 in zip(sorted1, sorted2):
-        if (s1.user != s2.user or s1.shift != s2.shift or 
-            s1.start_hour != s2.start_hour or s1.end_hour != s2.end_hour):
-            return False
-    
-    return True
-
-
 def _group_consecutive_dates(shift_collection: dict) -> list:
     """Group consecutive dates with identical shift assignments into date ranges.
-    
+
     Returns a list of tuples: ((start_date, end_date), [shifts])
     """
     if not shift_collection:
         return []
-    
+
     sorted_dates = sorted(shift_collection.keys())
     date_ranges = []
-    
+
     current_start = sorted_dates[0]
     current_end = sorted_dates[0]
     current_shifts = shift_collection[sorted_dates[0]]
-    
+
     for i in range(1, len(sorted_dates)):
         date = sorted_dates[i]
         shifts = shift_collection[date]
-        
+
         # Check if this date is consecutive and has the same shifts
         if (date == current_end + timedelta(days=1) and 
-            _shifts_equal(shifts, current_shifts)):
+            ShiftCheck().shifts_equal(shifts, current_shifts)):
             # Extend the current range
             current_end = date
         else:
@@ -148,11 +174,26 @@ def _group_consecutive_dates(shift_collection: dict) -> list:
             current_start = date
             current_end = date
             current_shifts = shifts
-    
+
     # Don't forget the last range
     date_ranges.append(((current_start, current_end), current_shifts))
-    
+
     return date_ranges
+
+
+def _shift_engineer(roll: dict, overrides: list) -> Tuple[str, bool]:
+    """Check if a roll has an override."""
+    for o in overrides:
+        if (
+            o["origOnCallUser"]["username"] ==
+            roll["onCallUser"]["username"]
+            and not (
+                _date_str_to_dt(o["end"]) < _date_str_to_dt(roll["start"])
+                or _date_str_to_dt(o["start"]) > _date_str_to_dt(roll["end"])
+            )
+        ):
+            return o["overrideOnCallUser"]["username"], True
+    return roll["onCallUser"]["username"], False
 
 
 def display_schedules(user_display: str, data: dict, **users) -> None:
@@ -165,6 +206,11 @@ def display_schedules(user_display: str, data: dict, **users) -> None:
         overrides = schedule.get("overrides", [])
         for s in sched:
             for r in s["rolls"]:
+                username, is_override = _shift_engineer(r, overrides)
+                if is_override:
+                    user = f"{users[username][user_display]} (Override)"
+                else:
+                    user = users[username][user_display]
                 start = _date_str_to_dt(r["start"])
                 end = _date_str_to_dt(r["end"])
                 days = (
@@ -178,7 +224,7 @@ def display_schedules(user_display: str, data: dict, **users) -> None:
                             _date_to_str(start, "%H:%M"),
                             _date_to_str(end, "%H:%M"),
                             s["shiftName"],
-                            users[r["onCallUser"]["username"]][user_display]
+                            user
                         )
                     )
         
@@ -194,8 +240,6 @@ def display_schedules(user_display: str, data: dict, **users) -> None:
                 print(f"**{date_range[0]} - {date_range[1]}** {FMT}")
             for shift in shifts:
                 print(shift)
-        # print_overrides(overrides)
-        # sep()
 
 
 def get_oncall_schedule(team: str, creds: Creds) -> dict:
@@ -218,23 +262,6 @@ def get_users(creds: Creds) -> dict:
         data = response.read().decode("utf-8")
         json_data = json.loads(data)
     return {user["username"]: user for user in json_data["users"]}
-
-
-def print_overrides(overrides: list) -> None:
-    """Print the overrides for the on-call schedule."""
-    if not overrides:
-        return
-    print("Overrides:")
-    for o in overrides:
-        start = _date_str_to_dt(o["start"])
-        end = _date_str_to_dt(o["end"])
-        start_str = _date_to_str(start)
-        end_str = _date_to_str(end)
-        print(
-            f"**{o['overrideOnCallUser']['username']}** for "
-            f"**{o['origOnCallUser']['username']}**: Start "
-            f"{start_str}, End {end_str} {FMT}"
-        )
 
 
 def sep():
