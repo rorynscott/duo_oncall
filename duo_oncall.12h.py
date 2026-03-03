@@ -23,7 +23,7 @@ CREDS_FILE = ".victorops"
 CONFIG_FILE = ".config.ini"
 DT_FMT = "%Y-%m-%dT%H:%M:%S%z"
 FMT = " | color=#000001,#FFFFFE md=True"
-SCHEDULE_URI = "/v2/team/{team}/oncall/schedule?daysForward=30"
+SCHEDULE_URI = "/v2/team/{team}/oncall/schedule?daysForward=30&step=1"
 SWIFTBAR_CACHE_PATH = os.environ.get(
     "SWIFTBAR_PLUGIN_CACHE_PATH",
     CACHE_PATH
@@ -277,6 +277,7 @@ def main():
         display_conf = conf["display_conf"]
     except KeyError:
         display_conf = {}
+
     print("DuoOnCall")
     sep()
     creds = _get_creds()
