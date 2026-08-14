@@ -12,7 +12,7 @@ from typing import Tuple
 BASE_URL = (
     "https://api.victorops.com/api-public"
 )
-CACHE_PATH = (
+LEGACY_CACHE_PATH = (
     Path.home() / "Library" / "Caches" / "com.ameba.SwiftBar" /
     "Plugins" / "duo_oncall.12h.py"
 )
@@ -24,10 +24,6 @@ CONFIG_FILE = ".config.ini"
 DT_FMT = "%Y-%m-%dT%H:%M:%S%z"
 FMT = " | color=#000001,#FFFFFE md=True"
 SCHEDULE_URI = "/v2/team/{team}/oncall/schedule?daysForward=30&step=1"
-SWIFTBAR_CACHE_PATH = os.environ.get(
-    "SWIFTBAR_PLUGIN_CACHE_PATH",
-    CACHE_PATH
-)
 USER_URI = "/v2/user"
 
 
@@ -113,28 +109,60 @@ def _date_to_str(date_obj: datetime, dt_fmt: str = "%Y-%m-%d %H:%M") -> str:
     return date_obj.strftime(dt_fmt)
 
 
-def _get_creds() -> dict:
+def _creds_path() -> Path:
+    """Find the creds file.
+
+    Checked in order: an explicit override, the plugin dir, the home dir,
+    then the pre-SwiftBar-2.1.1 cache dir. The cache dir is last because
+    SwiftBar derives it from the plugin's path, so it moves when the app
+    changes its naming scheme or when the plugin is relocated.
+    """
+
+    candidates = [
+        Path(p) for p in (
+            os.environ.get("DUO_ONCALL_CREDS"),
+            os.path.join(_plugin_dir(), CREDS_FILE),
+            Path.home() / CREDS_FILE,
+            LEGACY_CACHE_PATH / CREDS_FILE,
+        ) if p
+    ]
+    for path in candidates:
+        if path.is_file():
+            return path
+    raise FileNotFoundError(
+        f"No {CREDS_FILE} found in: " +
+        ", ".join(str(c.parent) for c in candidates)
+    )
+
+
+def _get_creds() -> Creds:
     """Get the credentials from the creds file."""
     cred_dict = {}
-    file_ = os.path.join(SWIFTBAR_CACHE_PATH, CREDS_FILE)
-    with open(file_, encoding="utf-8") as f:
+    with open(_creds_path(), encoding="utf-8") as f:
         for line in f.readlines():
-            key, value = line.strip().split(":")
+            if not line.strip():
+                continue
+            key, value = line.strip().split(":", 1)
             cred_dict[key.lower()] = value
     creds = Creds(**cred_dict)
     return creds
+
+
+def _plugin_dir() -> str:
+    """Get the directory the plugin lives in."""
+
+    plugin_path = os.environ.get(
+        "SWIFTBAR_PLUGIN_PATH",
+        os.path.realpath(__file__)
+    )
+    return os.path.dirname(plugin_path)
 
 
 def _get_config() -> configparser.ConfigParser:
     """Get the config file."""
 
     config = configparser.ConfigParser()
-    plugin_path = os.environ.get(
-        "SWIFTBAR_PLUGIN_PATH",
-        os.path.realpath(__file__)
-    )
-    plugin_dir = os.path.dirname(plugin_path)
-    config.read(os.path.join(plugin_dir, CONFIG_FILE))
+    config.read(os.path.join(_plugin_dir(), CONFIG_FILE))
     return config
 
 
