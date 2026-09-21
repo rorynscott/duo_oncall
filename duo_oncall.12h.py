@@ -12,10 +12,6 @@ from typing import Tuple
 BASE_URL = (
     "https://api.victorops.com/api-public"
 )
-CACHE_PATH = (
-    Path.home() / "Library" / "Caches" / "com.ameba.SwiftBar" /
-    "Plugins" / "duo_oncall.12h.py"
-)
 # CREDS_FILE should be in your home dir with the following format:
 #   API_KEY:<your_api_key>
 #   API_ID:<your_api_id>
@@ -24,10 +20,6 @@ CONFIG_FILE = ".config.ini"
 DT_FMT = "%Y-%m-%dT%H:%M:%S%z"
 FMT = " | color=#000001,#FFFFFE md=True"
 SCHEDULE_URI = "/v2/team/{team}/oncall/schedule?daysForward=30&step=1"
-SWIFTBAR_CACHE_PATH = os.environ.get(
-    "SWIFTBAR_PLUGIN_CACHE_PATH",
-    CACHE_PATH
-)
 USER_URI = "/v2/user"
 
 
@@ -116,7 +108,7 @@ def _date_to_str(date_obj: datetime, dt_fmt: str = "%Y-%m-%d %H:%M") -> str:
 def _get_creds() -> dict:
     """Get the credentials from the creds file."""
     cred_dict = {}
-    file_ = os.path.join(SWIFTBAR_CACHE_PATH, CREDS_FILE)
+    file_ = Path.home() / CREDS_FILE
     with open(file_, encoding="utf-8") as f:
         for line in f.readlines():
             key, value = line.strip().split(":")

@@ -1,6 +1,7 @@
 # Installation Instructions
 
-1. You will need a credential file (named `.victorops`), which contains an API key and ID from VictorOps. Ask @rorscott for one! You will need to put it in your SwiftBar cache directory; mine is `/Users/rorscott/Library/Caches/com.ameba.SwiftBar/Plugins/duo_oncall.12h.py/.victorops`
+1. You will need a credential file (named `.victorops`), which contains an API key and ID from VictorOps. Ask @rorscott for one! You will need to put it in your home directory, i.e. `~/.victorops`.
+    * This used to live in the SwiftBar cache directory (e.g. `~/Library/Caches/com.ameba.SwiftBar/Plugins/duo_oncall.12h.py/.victorops`). SwiftBar owns that directory and changed how it names it, which broke the plugin. If you have a creds file there, move it: `mv ~/Library/Caches/com.ameba.SwiftBar/Plugins/*/.victorops ~/.victorops`
 2. You can install Python 3 or use the executable in `dist/duo_oncall.12h/duo_oncall.12h`
 2. Install SwiftBar with "brew install swiftbar" or from https://github.com/swiftbar/SwiftBar/releases/latest
 3. Start SwiftBar and it will ask you where you want to store plugins. I used `Documents/swiftbar_plugins`.
